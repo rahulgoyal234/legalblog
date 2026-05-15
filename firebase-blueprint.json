@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "Post": {
+      "title": "Post",
+      "description": "A blog post",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The title of the post" },
+        "slug": { "type": "string", "description": "URL-friendly slug" },
+        "content": { "type": "string", "description": "Markdown content" },
+        "excerpt": { "type": "string", "description": "Brief summary" },
+        "category": { "type": "string", "description": "Post category" },
+        "status": { "type": "string", "enum": ["draft", "published"], "description": "Post status" },
+        "authorId": { "type": "string", "description": "UID of the author" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "coverImage": { "type": "string", "description": "URL to cover image" }
+      },
+      "required": ["title", "slug", "content", "status", "authorId", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile with admin capability",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "editor"] },
+        "avatar": { "type": "string" },
+        "bio": { "type": "string" }
+      },
+      "required": ["name", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Collection of blog posts"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User roles and metadata"
+    }
+  }
+}

@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function getRole(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && getRole(request.auth.uid) == 'admin';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Helpers
+    function isValidPost(data) {
+      return data.title is string && data.title.size() <= 200 &&
+             data.slug is string && data.slug.size() <= 200 &&
+             data.content is string && data.content.size() <= 50000 &&
+             data.excerpt is string && data.excerpt.size() <= 500 &&
+             data.category is string && data.category.size() <= 50 &&
+             data.status in ['draft', 'published'] &&
+             data.authorId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             data.email == request.auth.token.email &&
+             data.role in ['admin', 'editor'];
+    }
+
+    // Collection: Users
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && 
+                      isValidUser(incoming()) &&
+                      // Prevent self-elevating to admin unless it's the bootstrapped email
+                      (incoming().role != 'admin' || request.auth.token.email == 'admin@rahulgoyal.com' || request.auth.token.email == 'rahulgyl48@gmail.com');
+      
+      allow update: if isSignedIn() && isOwner(userId) && 
+                      isValidUser(incoming()) &&
+                      incoming().role == existing().role; // Cannot change own role
+    }
+
+    // Collection: Posts
+    match /posts/{postId} {
+      allow get: if existing().status == 'published' || isAdmin();
+      allow list: if (resource.data.status == 'published') || isAdmin();
+      
+      allow create: if isAdmin() && isValidPost(incoming()) && 
+                      incoming().createdAt == request.time &&
+                      incoming().updatedAt == request.time;
+      
+      allow update: if isAdmin() && isValidPost(incoming()) &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().updatedAt == request.time &&
+                      (
+                        // Action: Toggle Status
+                        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+                        // Action: Full Edit
+                        incoming().diff(existing()).affectedKeys().hasAll(['title', 'content', 'excerpt', 'category', 'updatedAt'])
+                      );
+                      
+      allow delete: if isAdmin();
+    }
+  }
+}
